@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RecruitFlow AI Demo</title>
+    <link rel="stylesheet" href="/public/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">R</div>
+          <div>
+            <strong>RecruitFlow AI</strong>
+            <span>招聘数据助理</span>
+          </div>
+        </div>
+        <nav class="nav" aria-label="主导航">
+          <button class="nav-item active" data-page="dashboard">看板</button>
+          <button class="nav-item" data-page="ingest">消息采集</button>
+          <button class="nav-item" data-page="candidates">候选人</button>
+          <button class="nav-item" data-page="integrations">集成</button>
+          <button class="nav-item" data-page="logs">日志</button>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="pill">规则抽取器</span>
+          <span class="muted">无大模型 API 依赖</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1 id="pageTitle">招聘看板</h1>
+            <p id="pageSubtitle">企业微信群消息自动结构化，候选人数据实时归档。</p>
+          </div>
+          <div class="top-actions">
+            <button class="ghost" id="refreshBtn">刷新</button>
+            <button class="primary" id="syncTopBtn">同步腾讯文档</button>
+          </div>
+        </header>
+
+        <section class="page active" id="dashboardPage">
+          <div class="metrics">
+            <div class="metric">
+              <span>候选人总数</span>
+              <strong id="metricTotal">0</strong>
+            </div>
+            <div class="metric">
+              <span>今日新增</span>
+              <strong id="metricToday">0</strong>
+            </div>
+            <div class="metric">
+              <span>待跟进</span>
+              <strong id="metricPending">0</strong>
+            </div>
+            <div class="metric warning">
+              <span>逾期未跟进</span>
+              <strong id="metricOverdue">0</strong>
+            </div>
+          </div>
+
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>招聘阶段漏斗</h2>
+                <span class="muted">按候选人当前阶段统计</span>
+              </div>
+              <div class="bar-list" id="stageBars"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <h2>渠道来源分布</h2>
+                <span class="muted">识别来源字段后自动聚合</span>
+              </div>
+              <div class="bar-list" id="sourceBars"></div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>最近候选人</h2>
+              <span class="muted">低置信度和缺失字段会高亮</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>姓名</th>
+                    <th>岗位</th>
+                    <th>阶段</th>
+                    <th>状态</th>
+                    <th>来源</th>
+                    <th>跟进时间</th>
+                    <th>置信度</th>
+                  </tr>
+                </thead>
+                <tbody id="recentCandidates"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="ingestPage">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>企业微信群实时消息入口</h2>
+              <span class="muted">企业微信应用回调 / 会话存档 / 转发入口</span>
+            </div>
+            <div class="connection-grid">
+              <div class="connection-item">
+                <span>回调地址</span>
+                <code id="wecomInboundUrl">POST /api/wecom/inbound</code>
+              </div>
+              <div class="connection-item">
+                <span>Token</span>
+                <code id="wecomInboundToken">demo-token</code>
+              </div>
+              <div class="connection-item">
+                <span>页面刷新</span>
+                <code id="inboundStatus">自动刷新中，每 5 秒同步一次</code>
+              </div>
+            </div>
+            <div class="flow-note">
+              <strong>正式链路</strong>
+              <span>企业微信群消息 → 企业微信应用回调/会话存档 → POST /api/wecom/inbound → AI 抽取 → candidates.json → 看板/表格更新 → 腾讯文档同步</span>
+            </div>
+            <div class="flow-note subtle">
+              <strong>接入说明</strong>
+              <span>群机器人 Webhook 更适合推送提醒；读取群消息需要使用企业微信应用回调、会话存档，或让 HR 在群内通过表单/转发入口提交。</span>
+            </div>
+            <div class="button-row">
+              <button class="primary" id="inboundMockBtn">模拟企微群消息推送</button>
+            </div>
+          </section>
+
+          <div class="grid two ingest-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>企业微信群消息</h2>
+                <span class="muted">可手动粘贴，也可用上方入口模拟实时回调</span>
+              </div>
+              <textarea id="messageInput" spellcheck="false"></textarea>
+              <div class="button-row">
+                <button class="ghost" id="sampleBtn">填入样例</button>
+                <button class="primary" id="ingestBtn">AI 解析并入库</button>
+              </div>
+              <div class="endpoint">
+                <span>手动采集接口</span>
+                <code>POST /api/messages/ingest</code>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <h2>解析结果</h2>
+                <span class="muted">当前由规则抽取器生成</span>
+              </div>
+              <div id="extractPreview" class="extract-preview"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="candidatesPage">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>候选人数据表</h2>
+              <span class="muted">数据来源：data/candidates.json</span>
+            </div>
+            <div class="filters">
+              <input id="candidateSearch" placeholder="搜索姓名、岗位、来源" />
+              <select id="stageFilter">
+                <option value="">全部阶段</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>姓名</th>
+                    <th>电话</th>
+                    <th>岗位</th>
+                    <th>阶段</th>
+                    <th>状态</th>
+                    <th>来源</th>
+                    <th>面试官</th>
+                    <th>跟进</th>
+                    <th>同步</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="candidateRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="integrationsPage">
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>企业微信机器人</h2>
+                <span class="muted">推送测试消息和面试进展提醒</span>
+              </div>
+              <label>运行模式</label>
+              <select id="wecomMode">
+                <option value="mock">Mock</option>
+                <option value="real">真实 Webhook</option>
+              </select>
+              <label>Webhook URL</label>
+              <input id="wecomWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." />
+              <label>测试消息</label>
+              <textarea id="pushMessage">RecruitFlow AI 今日提醒：有候选人需要跟进，请查看招聘看板。</textarea>
+              <div class="button-row">
+                <button class="ghost" id="saveConfigBtn">保存配置</button>
+                <button class="primary" id="pushBtn">测试推送</button>
+                <button class="primary" id="reminderBtn">推送面试进展提醒</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>AI 抽取器</h2>
+                <span class="muted">当前默认规则抽取，后续可切大模型 API</span>
+              </div>
+              <label>抽取模式</label>
+              <select id="aiMode">
+                <option value="rule">规则抽取器</option>
+                <option value="llm">大模型 API</option>
+              </select>
+              <label>API Endpoint</label>
+              <input id="aiEndpoint" placeholder="https://api.openai.com/v1/chat/completions" />
+              <label>Model</label>
+              <input id="aiModel" placeholder="gpt-4.1-mini" />
+              <label>API Key</label>
+              <input id="aiApiKey" type="password" placeholder="当前 Demo 可留空，留空时自动回退规则抽取" />
+              <div class="endpoint">
+                <span>统一入口</span>
+                <code>src/aiExtractor.js</code>
+                <code>src/llmExtractor.js</code>
+              </div>
+              <div class="button-row">
+                <button class="ghost" id="saveConfigBtn3">保存配置</button>
+              </div>
+            </section>
+          </div>
+
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>腾讯文档同步</h2>
+                <span class="muted">Mock 模式生成 exports/candidates.csv</span>
+              </div>
+              <label>运行模式</label>
+              <select id="docsMode">
+                <option value="mock">Mock</option>
+                <option value="real">真实 API</option>
+              </select>
+              <label>App ID</label>
+              <input id="docsAppId" placeholder="腾讯文档开放平台 App ID" />
+              <label>Document ID</label>
+              <input id="docsDocumentId" placeholder="在线文档 ID" />
+              <label>Sheet ID</label>
+              <input id="docsSheetId" placeholder="表格 Sheet ID" />
+              <div class="button-row">
+                <button class="ghost" id="saveConfigBtn2">保存配置</button>
+                <button class="primary" id="syncBtn">手动同步</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="logsPage">
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>腾讯文档同步日志</h2>
+                <span class="muted">同步状态和目标位置</span>
+              </div>
+              <div class="log-list" id="syncLogs"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <h2>企业微信推送日志</h2>
+                <span class="muted">机器人推送记录</span>
+              </div>
+              <div class="log-list" id="pushLogs"></div>
+            </section>
+          </div>
+          <section class="panel">
+            <div class="panel-head">
+              <h2>消息解析日志</h2>
+              <span class="muted">原始群消息和候选人映射</span>
+            </div>
+            <div class="log-list wide" id="messageLogs"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="/src/ruleExtractor.js"></script>
+    <script src="/public/app.js"></script>
+  </body>
+</html>
